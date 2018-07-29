@@ -20,19 +20,20 @@ class IdxSplitter():
     @classmethod
     def new_root(self, num_rows, init_idxs=None):
         obj = IdxSplitter()
-        obj.num_rows = num_rows
         if init_idxs is None:
+            obj.num_rows = num_rows
             obj.idxs = list(range(num_rows))
         else:
-            obj.idxs = init_idxs
+            obj.idxs = init_idxs[:]
+            obj.num_rows = len(init_idxs)
         return obj
 
     def split(self, fraction):
         left = int(fraction * self.num_rows)
-        idxs_shuffled = self.idxs
+        idxs_shuffled = self.idxs[:]
         random.shuffle(idxs_shuffled)
-        left_idxs = idxs_shuffled[:left]
-        right_idxs = idxs_shuffled[left:]
+        left_idxs = sorted(idxs_shuffled[:left])
+        right_idxs = sorted(idxs_shuffled[left:])
         left_obj = IdxSplitter.new_root(left, left_idxs)
         right_obj = IdxSplitter.new_root(self.num_rows - left, right_idxs)
         return left_obj, right_obj
@@ -54,7 +55,7 @@ def ceil_power2(n):
     return 2 ** int(np.ceil(np.log2(n)))
 
 
-def random_pad_2n(items, pad_value = None, pad_is_func = False):
+def random_pad_2n(items, pad_value=None, pad_is_func=False):
     '''
     Randomly intersperses None into the list so that it's length is an integer
     power of 2.
