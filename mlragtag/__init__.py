@@ -100,6 +100,57 @@ def binary_fold(fold_fn, items):
     return items[0]
 
 
+class FoldResult():
+    def __init__(self, value, idx_range):
+        self.value = value
+        self.idx_range = idx_range
+        self.inputs = None
+
+
+def random_fold_ordering(N):
+    '''
+        Similar to a permutation.
+        Generates a list of indexes such that at each time-step
+        objects at idx[t] and idx[t] + 1 are combined.
+        idx[t] is to be replaced by this new object and the object at
+        idx[t] + 1 is removed from the list.
+        (for use in permutation_fold)
+    '''
+    idxs = []
+    for k in range(N - 1, 0, -1):
+        idxs.append(random.randrange(k))
+    return idxs
+
+
+def permutation_fold(fold_fn, items, pick_next, track_parents):
+    '''
+    fold_fn, items = fold function and list of items, resepectively.
+    pick_next =
+        length N - 1 list of numbers such that it indexes into the
+        remaining items list, excluding the last item.
+        At each step items[pick_next[step]] and items[pick_next[step]+1]
+        are combined.
+    track_parents =
+        Whether the FoldResult objects should keep track of their inputs.
+        (otherwise fold_result's inputs are (None, None) )
+    Returns a FoldResult object containing the final result in .value and
+    various optional information on the intermediate folding results.
+    '''
+    items = [FoldResult(item, (k, k)) for item, k in enumerate(items)]
+    for k, idx in enumerate(pick_next):
+        new_item = FoldResult(
+            fold_fn(
+                items[idx].value,
+                items[idx + 1].value
+            ),
+            (items[idx].idx_range[0], items[idx + 1].idx_range[1]))
+        if track_parents:
+            new_item.inputs = (items[idx], items[idx + 1])
+        items[idx] = new_item
+        del items[idx + 1]
+    return items[0]
+
+
 lrelu = torch.nn.LeakyReLU(0.3)
 sigmoid = torch.nn.Sigmoid()
 
