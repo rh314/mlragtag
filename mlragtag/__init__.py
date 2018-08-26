@@ -136,7 +136,7 @@ def permutation_fold(fold_fn, items, pick_next, track_parents):
     Returns a FoldResult object containing the final result in .value and
     various optional information on the intermediate folding results.
     '''
-    items = [FoldResult(item, (k, k)) for item, k in enumerate(items)]
+    items = [FoldResult(item, (k, k)) for k, item in enumerate(items)]
     for k, idx in enumerate(pick_next):
         new_item = FoldResult(
             fold_fn(
