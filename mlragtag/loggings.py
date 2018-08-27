@@ -39,16 +39,25 @@ class List():
                 CREATE TABLE %s(tstamp REAL, value REAL)
                 ''' % self.uuid)
             db.commit()
+        self.queue = []
 
     def append(self, x):
         if not isinstance(x, (float, int)):
             raise TypeError
         tstamp = time.time()
-        db = get_db()
-        with db.cursor() as cur:
-            cur.execute(
-                'INSERT INTO %s VALUES(%f, %f)' %
-                (self.uuid, tstamp, x))
+        queue = self.queue
+        self.last = x + 0
+        queue.append((tstamp, self.last))
+        if len(queue) >= 50:
+            db = get_db()
+            cmd = 'INSERT INTO %s VALUES(%%s, %%s)' % self.uuid
+            cmd = ';'.join(((cmd,) * len(queue)))
+            queue_flat = []
+            for pair in queue:
+                queue_flat.extend(pair)
+            with db.cursor() as cur:
+                cur.execute(cmd, queue_flat)
+            del queue[:]
 
     def extend(self, x):
         rowdata = []
@@ -67,39 +76,60 @@ class List():
         db = get_db()
         with db.cursor() as cur:
             cur.execute('SELECT value FROM %s' % self.uuid)
-            res = [_[0] for _ in cur.fetchall()]
+            fetched = cur.fetchall()
+            res = [_[0] for _ in fetched]
+        res.extend([_[1] for _ in self.queue])
         return res
 
 
 class MovingAverage():
-    def __init__(self, tau):
+    def __init__(self, tau, size=None):
         self.inv_tau = 1. / tau
-        self.averaged = []
-        self.raw = []
+        self.size = size
+        if size is None:
+            self.averaged = List()
+            self.raw = List()
+        else:
+            self.wrapped = [MovingAverage(tau) for _ in range(size)]
+        self.last = None
 
     def add(self, new_val):
+        if self.size is not None:
+            assert len(new_val) == self.size
+            for item in new_val:
+                assert isinstance(item, (int, float))
+            next_vals = []
+            for k in range(self.size):
+                next_vals.append(
+                    self.wrapped[k].add(new_val[k]))
+            self.last = next_vals
+            return next_vals
         if isinstance(new_val, (int, float)):
             pass
-        elif isinstance(new_val, list):
-            new_val = np.array(new_val)
-        elif isinstance(new_val, np.ndarray) and new_val.ndim > 1:
-            new_val = new_val.squeeze()
-            if new_val.ndim > 1:
-                raise Exception('new_val must be squueze-able')
-        self.raw.append(new_val)
-        if len(self.averaged) > 0:
-            prev = self.averaged[-1]
         else:
+            raise TypeError
+        self.raw.append(new_val)
+        if self.last is None:
             prev = new_val
-        new_avg = prev + (new_val - prev) * self.inv_tau
-        self.averaged.append(new_avg)
-        return new_avg
+        else:
+            prev = self.last
+        next_val = prev + (new_val - prev) * self.inv_tau
+        self.averaged.append(next_val)
+        self.last = next_val
+        return next_val
 
     def numpy(self):
-        return np.array(self.averaged)
+        if self.size is None:
+            return np.array(self.averaged.get_values())
+        else:
+            values = []
+            for item in self.wrapped:
+                values.append(item.averaged.get_values())
+            return np.array(values).T
 
     @classmethod
     def from_existing(klass, old_lst, tau):
+        raise Exception('TODO')
         obj = MovingAverage(tau)
         for item in old_lst:
             obj.add(item)
