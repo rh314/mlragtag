@@ -39,6 +39,9 @@ class Function(PipeOp):
         self.func = func
         self.can_step = True
 
+    def __repr__(self):
+        return '<Function %s>' % self.name
+
     def apply(self, inpt):
         return self.func(inpt)
 
@@ -107,3 +110,58 @@ class PCDropout(PipeOp):
             return inpt * mask
         else:
             return inpt
+
+
+class While():
+    def __init__(self, cond, body):
+        assert isinstance(cond, PipeOp)
+        assert isinstance(body, PipeOp)
+        self.cond = cond
+        self.body = body
+
+    def apply(self, inputs):
+        cond = self.cond
+        body = self.body
+        res = inputs
+        cond_v = cond.apply(res)
+        while cond_v:
+            res = body.apply(res)
+            cond_v = cond.apply(res)
+        return res
+
+    def apply_step(self, inputs, stack, first_step):
+        if first_step:
+            # extra stack position to save inputs that will be overwritten by
+            # cond's boolean
+            stack.append([self, inputs, 0, None])
+        else:
+            res = stack[-1][1]
+            i = stack[-1][2]
+            cond = self.cond
+            body = self.body
+            if i == 0:
+                stack[-1][2] = 1
+                stack[-1][3] = res  # save res which cond will overwrite
+                if cond.can_step:
+                    cond.apply_step(res, stack, True)
+                else:
+                    res = cond.apply(res)
+                    stack[-1][1] = res
+            elif i == 1:
+                assert isinstance(res, bool)
+                stack[-1][1] = stack[-1][3]  # restore res which cond overwrote
+                if res:
+                    stack[-1][2] = 2
+                else:
+                    stack[-1][2] = 3
+            elif i == 2:
+                stack[-1][2] = 0
+                if body.can_step:
+                    body.apply_step(res, stack, True)
+                else:
+                    res = body.apply(res)
+                    stack[-1][1] = res
+            else:
+                assert i == 3
+                stack[-2][1] = stack[-1][1]
+                stack.pop()
