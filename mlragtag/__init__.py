@@ -194,3 +194,44 @@ class SimpleNetwork(torch.nn.Module):
             self.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+
+class DynFText():
+    def __init__(self, embed_dim):
+        self.ngrams = {}  # vector, optimizer
+        self.cur_ngrams = set()
+        self.embed_dim = embed_dim
+
+    def get_word(self, word):
+        word = chr(1) + word + chr(2)
+        ngram_vecs = []
+        for k in range(len(word) - 2):
+            ngram = word[k:k + 3]
+            ngram_vecs.append(self.get_ngram(ngram))
+        for k in range(len(word) - 3):
+            ngram = word[k:k + 4]
+            ngram_vecs.append(self.get_ngram(ngram))
+        return sum(ngram_vecs)
+
+    def get_ngram(self, ngram):
+        ngrams = self.ngrams
+        self.cur_ngrams.add(ngram)
+        if ngram in ngrams:
+            ng_vec, _ = ngrams[ngram]
+        else:
+            ng_vec = torch.randn(self.embed_dim, requires_grad=True)
+            ng_opt = torch.optim.Adam([ng_vec])
+            ngrams[ngram] = [ng_vec, ng_opt]
+        return ng_vec
+
+    def zero_grad(self):
+        for ngram in self.cur_ngrams:
+            vec, opt = self.ngrams[ngram]
+            opt.zero_grad()
+        self.cur_ngrams = set()
+
+    def step(self):
+        assert len(self.cur_ngrams) > 0
+        for ngram in self.cur_ngrams:
+            vec, opt = self.ngrams[ngram]
+            opt.step()
