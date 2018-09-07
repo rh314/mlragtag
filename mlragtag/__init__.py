@@ -201,6 +201,7 @@ class DynFText():
         self.ngrams = {}  # vector, optimizer
         self.cur_ngrams = set()
         self.embed_dim = embed_dim
+        self.ngram_noise_magn = 0.001
 
     def get_word(self, word):
         word = chr(1) + word + chr(2)
@@ -222,6 +223,10 @@ class DynFText():
             ng_vec = torch.randn(self.embed_dim, requires_grad=True)
             ng_opt = torch.optim.Adam([ng_vec])
             ngrams[ngram] = [ng_vec, ng_opt]
+        ngram_noise_magn = self.ngram_noise_magn
+        if ngram_noise_magn > 0:
+            noise = (2 * torch.rand(self.embed_dim) - 1) * ngram_noise_magn
+            ng_vec = ng_vec + noise
         return ng_vec
 
     def zero_grad(self):
